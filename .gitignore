@@ -1,2 +1,10 @@
 IPT/
 output/
+llm-verifier-gaming.code-workspace
+.vscode/settings.json
+__pycache__/shortcuts.cpython-310.pyc
+shortcuts/__pycache__/__init__.cpython-310.pyc
+shortcuts/__pycache__/__init__.cpython-311.pyc
+shortcuts/__pycache__/shortcut_plots.cpython-310.pyc
+shortcuts/__pycache__/shortcut_plots.cpython-311.pyc
+shortcuts/__pycache__/slr_verifier.cpython-311.pyc
