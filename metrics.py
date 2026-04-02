@@ -7,9 +7,9 @@ import re
 from evaluate import load
 from openai import OpenAI
 import pandas as pd
-from evals.plots.plots import create_level_wise_plots
+from plots.plots import create_level_wise_plots
 from math import comb
-from evals.pricing import get_pricing
+from pricing import get_pricing
 client = OpenAI(api_key="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")
     
 complexity = {

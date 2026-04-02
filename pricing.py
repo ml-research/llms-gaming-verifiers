@@ -227,12 +227,54 @@ def get_pricing(model_name: str) -> dict:
             "input_cached": None,
             "output": .2
         },
-        "Qwen3-235B": {# check on 30.10.25 on openrouter
+        "Qwen3-235B-A22B": {# check on 30.10.25 on openrouter
             "model_tag": "",
             "release_date": "2024-09-25",
             "input": .18,
             "input_cached": None,
             "output": .54
+        },
+        "Qwen3.5-4B": {
+            "model_tag": "",
+            "release_date": "2026-02-25",
+            "input": .015,
+            "input_cached": None,
+            "output": .025
+        },
+        "Qwen3.5-9B": {
+            "model_tag": "",
+            "release_date": "2026-03-10",
+            "input": .05,
+            "input_cached": None,
+            "output": .15
+        },
+        "Qwen3.5-27B": {
+            "model_tag": "",
+            "release_date": "2026-02-25",
+            "input": .195,
+            "input_cached": None,
+            "output": 1.56
+        },
+        "Qwen3.5-35B-A3B": {
+            "model_tag": "",
+            "release_date": "2026-02-25",
+            "input": .1625,
+            "input_cached": None,
+            "output": 1.30
+        },
+        "Qwen3.5-122B-A10B": {
+            "model_tag": "",
+            "release_date": "2026-02-25",
+            "input": .26,
+            "input_cached": None,
+            "output": 2.08
+        },
+        "Qwen3.5-397B-A17B": {
+            "model_tag": "",
+            "release_date": "2026-02-25",
+            "input": .39,
+            "input_cached": None,
+            "output": 2.34
         },
         ## Vision Models
         "Qwen3-VL-2B": { # check on 30.10.25 on openrouter
@@ -256,7 +298,7 @@ def get_pricing(model_name: str) -> dict:
             "input_cached": None,
             "output": .5
         },
-        "Qwen3-VL-30B": { # check on 30.10.25 on openrouter
+        "Qwen3-VL-30B-A3B": { # check on 30.10.25 on openrouter
             "model_tag": "",
             "release_date": "2024-09-25",
             "input": .15,
@@ -270,7 +312,7 @@ def get_pricing(model_name: str) -> dict:
             "input_cached": None,
             "output": 1.1
         },
-        "Qwen3-VL-235B": { # check on 30.10.25 on openrouter
+        "Qwen3-VL-235B-A22B": { # check on 30.10.25 on openrouter
             "model_tag": "",
             "release_date": "2024-09-25",
             "input": .22,
@@ -312,6 +354,125 @@ def get_pricing(model_name: str) -> dict:
             "input": .06,
             "input_cached": None,
             "output": .22
+        },
+        "DeepSeek-R1-0528-Qwen3-8B-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-05-28",
+            "input": .55,
+            "input_cached": None,
+            "output": .55
+        },
+        "GLM-4.5-Air-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .44,
+            "input_cached": None,
+            "output": .44
+        },
+        "GLM-4.7-FP8-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .48,
+            "input_cached": None,
+            "output": .48
+        },
+        "Kimi-K2": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .57,
+            "input_cached": None,
+            "output": 2.3
+        },
+        "Kimi-K2.5-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .38,
+            "input_cached": None,
+            "output": 1.9
+        },
+        "Llama-3.3-Nemotron-Super-49B-v1-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .17,
+            "input_cached": None,
+            "output": .17
+        },
+        "Llama-3_1-Nemotron-Ultra-253B-v1-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .18,
+            "input_cached": None,
+            "output": .18
+        },
+        "NVIDIA-Nemotron-3-Nano-30B-A3B-BF16-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .48,
+            "input_cached": None,
+            "output": .48
+        },
+        "NVIDIA-Nemotron-3-Super-120B-A12B-BF16-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .41,
+            "input_cached": None,
+            "output": .41
+        },
+        "Nemotron-Cascade-2-30B-A3B-Thinking": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .42,
+            "input_cached": None,
+            "output": .42
+        },
+        "gpt-oss-120b": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .29,
+            "input_cached": None,
+            "output": .29
+        },
+        "gpt-oss-120b-effort-high": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .039,
+            "input_cached": None,
+            "output": .19
+        },
+        "gpt-oss-120b-effort-low": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .039,
+            "input_cached": None,
+            "output": .19
+        },
+        "gpt-oss-120b-effort-medium": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .039,
+            "input_cached": None,
+            "output": .19
+        },
+        "gpt-oss-20b": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .03,
+            "input_cached": None,
+            "output": .19
+        },
+        "gpt-oss-20b-effort-high": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .03,
+            "input_cached": None,
+            "output": .19
+        },
+        "gpt-oss-20b-effort-low": {
+            "model_tag": "",
+            "release_date": "2025-01-01",
+            "input": .03,
+            "input_cached": None,
+            "output": .19
         },
         "DeepSeek-R1-Distill-Llama-8B": {
             "model_tag": "",
@@ -376,15 +537,45 @@ def get_pricing(model_name: str) -> dict:
             "input_cached": None,
             "output": .20
         },
+        "Olmo-3.1-32B-Think": {
+            "model_tag": "",
+            "release_date": "2026-01-01",
+            "input": .15,
+            "input_cached": None,
+            "output": .50
+        },
+        "mistralai_Ministral-3-14B-Reasoning-2512": {
+            "model_tag": "",
+            "release_date": "2025-12-02",
+            "input": .20,
+            "input_cached": None,
+            "output": .20
+        },
+        "mistralai_Ministral-3-3B-Reasoning-2512": {
+            "model_tag": "",
+            "release_date": "2025-12-02",
+            "input": .10,
+            "input_cached": None,
+            "output": .10
+        },
+        "mistralai_Ministral-3-8B-Reasoning-2512": {
+            "model_tag": "",
+            "release_date": "2025-12-02",
+            "input": .15,
+            "input_cached": None,
+            "output": .15
+        },
     }
-    model_name = model_name.split('-2025')[0].split('-2024')[0]
+    model_name = model_name.split('-2026')[0].split('-2025')[0].split('-2024')[0]
     model_name = model_name.split('/')[-1]  # Handle model names with slashes
     model_name = model_name.split('-run')[0]  # Handle model names with slashes
     if model_name in pricing:
         return pricing[model_name]
-    models = list(pricing.keys())
+    model_name_lc = model_name.lower()
+    models = sorted(pricing.keys(), key=len, reverse=True)
     for m in models:
-        if m in model_name:
+        m_lc = m.lower()
+        if m_lc in model_name_lc or model_name_lc in m_lc:
             return pricing[m]
     print(f"Warning: Pricing for model '{model_name}' not found. Using default pricing.")
     return {
@@ -393,4 +584,83 @@ def get_pricing(model_name: str) -> dict:
         "input": .02,
         "input_cached": None,
         "output": .03
+    }
+
+
+import json as _json
+import os as _os
+import datetime as _datetime
+
+_OPENROUTER_PRICING_CACHE = None
+
+def _load_openrouter_pricing():
+    global _OPENROUTER_PRICING_CACHE
+    if _OPENROUTER_PRICING_CACHE is not None:
+        return _OPENROUTER_PRICING_CACHE
+    json_path = _os.path.join(_os.path.dirname(__file__), "openrouter_pricing_02_04_2026.json")
+    with open(json_path) as f:
+        data = _json.load(f)
+    # Build lookup: slug (part after '/', without :free/:extended) -> model entry
+    # When there's a collision, prefer the paid (non-zero prompt) entry
+    lookup = {}
+    for m in data["data"]:
+        raw_slug = m["id"].split("/")[-1].lower()
+        slug = raw_slug.split(":")[0]
+        prompt_price = float(m["pricing"].get("prompt", 0) or 0)
+        if slug not in lookup:
+            lookup[slug] = m
+        else:
+            existing_price = float(lookup[slug]["pricing"].get("prompt", 0) or 0)
+            if prompt_price > existing_price:
+                lookup[slug] = m
+    _OPENROUTER_PRICING_CACHE = lookup
+    return lookup
+
+
+def get_pricing_v2(model_name: str) -> dict:
+    """Get pricing from the downloaded OpenRouter pricing JSON.
+    Prices are in USD per million tokens (same format as get_pricing).
+    Prints a warning if the model is not found in the OpenRouter list.
+    """
+    lookup = _load_openrouter_pricing()
+
+    def _make_result(entry):
+        p = entry["pricing"]
+        created = entry.get("created")
+        release_date = _datetime.datetime.utcfromtimestamp(created).strftime("%Y-%m-%d") if created else ""
+        prompt_per_tok = float(p.get("prompt", 0) or 0)
+        completion_per_tok = float(p.get("completion", 0) or 0)
+        cache_per_tok = p.get("input_cache_read")
+        return {
+            "model_tag": entry["id"],
+            "release_date": release_date,
+            "input": prompt_per_tok * 1_000_000,
+            "input_cached": float(cache_per_tok) * 1_000_000 if cache_per_tok else None,
+            "output": completion_per_tok * 1_000_000,
+        }
+
+    # Normalize: strip path prefix and -run suffix, lowercase, unify _ and .
+    name = model_name.split('/')[-1].split('-run')[0].lower().replace('_', '.')
+    # Also prepare date-stripped variant
+    name_no_date = name.split('-2026')[0].split('-2025')[0].split('-2024')[0]
+    name_no_thinking = name_no_date.replace('-thinking', '')
+
+    for candidate in [name, name_no_date, name_no_thinking]:
+        if candidate in lookup:
+            return _make_result(lookup[candidate])
+
+    # Substring match (longest key first to prefer more specific matches)
+    for search in [name, name_no_date, name_no_thinking]:
+        candidates = sorted(lookup.keys(), key=len, reverse=True)
+        for key in candidates:
+            if key in search or search in key:
+                return _make_result(lookup[key])
+
+    print(f"Warning: Model '{model_name}' not found in OpenRouter pricing list.")
+    return {
+        "model_tag": "",
+        "release_date": "",
+        "input": 0.0,
+        "input_cached": None,
+        "output": 0.0,
     }

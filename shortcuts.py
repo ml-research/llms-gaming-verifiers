@@ -14,7 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from IPT.ipt.verifier import extract_hypothesis, verify_ipt
+from IPT.ipt.verifier import extract_hypothesis_with_meta, verify_ipt
+from pricing import get_pricing_v2
 
 try:
     from tqdm import tqdm
@@ -103,10 +104,6 @@ class ShortcutJudgeEvaluator:
         return []
 
     def load_model_outputs(self) -> Dict[str, List[Dict[str, Any]]]:
-        print("\n" + "=" * 80)
-        print("LOADING MODEL OUTPUTS")
-        print("=" * 80)
-
         model_outputs: Dict[str, List[Dict[str, Any]]] = {}
         model_dirs = sorted([d for d in glob.glob(os.path.join(self.output_dir, "*")) if os.path.isdir(d)])
 
@@ -117,19 +114,19 @@ class ShortcutJudgeEvaluator:
 
             outputs_path = os.path.join(model_dir, "model_outputs.json")
             if not os.path.exists(outputs_path):
-                print(f"⚠ No model_outputs.json for {model_name}, skipping...")
+                print(f"  ⚠  {model_name} — no model_outputs.json, skipping")
                 continue
 
             try:
                 with open(outputs_path, "r", encoding="utf-8") as f:
                     outputs_raw = json.load(f)
             except Exception as e:
-                print(f"⚠ Failed to parse JSON for {model_name}: {e}")
+                print(f"  ⚠  {model_name} — JSON parse error: {e}")
                 continue
 
             outputs = self._normalize_outputs(outputs_raw)
             if not outputs:
-                print(f"⚠ No valid outputs for {model_name}, skipping...")
+                print(f"  ⚠  {model_name} — no valid outputs, skipping")
                 continue
 
             cleaned: List[Dict[str, Any]] = []
@@ -148,6 +145,7 @@ class ShortcutJudgeEvaluator:
                         "problem_id": problem_id,
                         "level": level,
                         "model_completion": item.get("model_completion", ""),
+                        "prompt_tokens": item.get("prompt_tokens", None),
                         "completion_tokens": item.get("completion_tokens", None),
                         "reference": item.get("reference", {}),
                         "ground_truth": item.get("ground_truth"),
@@ -155,7 +153,6 @@ class ShortcutJudgeEvaluator:
                 )
 
             model_outputs[model_name] = cleaned
-            print(f"✓ Loaded {len(cleaned)} outputs from {model_name}")
 
         return model_outputs
 
@@ -176,10 +173,6 @@ class ShortcutJudgeEvaluator:
         return model_name, output_idx, result
 
     def evaluate_with_ipt(self, model_outputs: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
-        print("\n" + "=" * 80)
-        print("EVALUATING: IPT (EXTENSIONAL + ISOMORPHIC)")
-        print("=" * 80)
-
         eval_inputs: List[Tuple[str, int, str, str, Dict[str, Any], int]] = []
 
         for model_name, outputs in model_outputs.items():
@@ -203,8 +196,18 @@ class ShortcutJudgeEvaluator:
                 if not isinstance(eval_config, dict):
                     eval_config = {}
 
-                extracted = extract_hypothesis(prediction)
+                is_gpt_family = "gpt" in str(model_name).lower()
+                line_parse_enabled = not is_gpt_family
+                extracted, extraction_meta = extract_hypothesis_with_meta(
+                    prediction,
+                    enable_line_parsing=line_parse_enabled,
+                )
                 output["extracted_hypothesis"] = extracted
+                output["extraction_method"] = extraction_meta.get("method")
+                output["extraction_preprocess"] = extraction_meta.get("preprocess")
+                output["line_parse_enabled"] = line_parse_enabled
+                output["extraction_structured"] = bool(extraction_meta.get("structured_parse", False))
+                output["extraction_success"] = bool(extracted and extraction_meta.get("structured_parse", False))
                 if not extracted:
                     output.update(self._empty_result("no hypothesis after extraction"))
                     continue
@@ -212,7 +215,6 @@ class ShortcutJudgeEvaluator:
                 eval_inputs.append((model_name, idx, extracted, validation_program, eval_config, self.timeout))
 
         if not eval_inputs:
-            print("No valid predictions to evaluate.")
             return model_outputs
 
         workers = self.workers
@@ -237,10 +239,6 @@ class ShortcutJudgeEvaluator:
         return model_outputs
 
     def compute_statistics(self, model_outputs: Dict[str, List[Dict[str, Any]]]) -> pd.DataFrame:
-        print("\n" + "=" * 80)
-        print("COMPUTING STATISTICS")
-        print("=" * 80)
-
         rows: List[Dict[str, Any]] = []
 
         for model_name, outputs in model_outputs.items():
@@ -281,6 +279,9 @@ class ShortcutJudgeEvaluator:
                 ext_ok = output.get("extensional_correct", None)
                 iso_ok = output.get("isomorphic_correct", None)
                 is_shortcut = bool(output.get("is_reward_shortcut", False))
+                completion_text = output.get("model_completion") or ""
+                has_think_open = "<think>" in completion_text
+                has_think_close = "</think>" in completion_text
 
                 row = {
                     "model_name": model_name,
@@ -293,6 +294,16 @@ class ShortcutJudgeEvaluator:
                     "heuristic_shortcut": is_shortcut,
                     "shortcut_type": "reward_shortcut" if is_shortcut else "none",
                     "shortcut_confidence": 1.0 if is_shortcut else 0.0,
+                    "syntax_valid": output.get("syntax_valid", False),
+                    "extraction_method": output.get("extraction_method", None),
+                    "extraction_preprocess": output.get("extraction_preprocess", None),
+                    "line_parse_enabled": output.get("line_parse_enabled", None),
+                    "extraction_structured": output.get("extraction_structured", False),
+                    "extraction_success": output.get("extraction_success", False),
+                    "has_think_open": has_think_open,
+                    "has_think_close": has_think_close,
+                    "has_think_tags": has_think_open and has_think_close,
+                    "prompt_tokens": output.get("prompt_tokens", None),
                     "completion_tokens": output.get("completion_tokens", None),
                 }
 
@@ -310,9 +321,7 @@ class ShortcutJudgeEvaluator:
 
                 rows.append(row)
 
-        df = pd.DataFrame(rows)
-        print(f"✓ Processed {len(df)} evaluations")
-        return df
+        return pd.DataFrame(rows)
 
     def _get_reasoning_effort_map(self, df: pd.DataFrame):
         if "completion_tokens" not in df.columns:
@@ -326,6 +335,120 @@ class ShortcutJudgeEvaluator:
         temp["completion_tokens"] = tokens
         by_model = temp.groupby("model_name")["completion_tokens"].mean().to_dict()
         overall = float(tokens.mean())
+        return by_model, overall
+
+    def _get_syntax_score_map(self, df: pd.DataFrame):
+        if "syntax_valid" not in df.columns:
+            return {}, None
+
+        syntax = pd.to_numeric(df["syntax_valid"], errors="coerce")
+        if syntax.notna().sum() == 0:
+            return {}, None
+
+        temp = df.copy()
+        temp["syntax_valid"] = syntax
+        by_model = temp.groupby("model_name")["syntax_valid"].mean().to_dict()
+        overall = float(syntax.mean())
+        return by_model, overall
+
+    def _get_parse_success_map(self, df: pd.DataFrame):
+        if "extraction_success" not in df.columns:
+            return {}, None
+
+        parse_ok = pd.to_numeric(df["extraction_success"], errors="coerce")
+        if parse_ok.notna().sum() == 0:
+            return {}, None
+
+        # ParseOK proxy requested by user:
+        # structured extraction success OR explicit </think> delimiter found.
+        if "has_think_close" in df.columns:
+            think_close = pd.to_numeric(df["has_think_close"], errors="coerce").fillna(0)
+            parse_ok = ((parse_ok.fillna(0) > 0) | (think_close > 0)).astype(float)
+
+        temp = df.copy()
+        temp["extraction_success"] = parse_ok
+        by_model = temp.groupby("model_name")["extraction_success"].mean().to_dict()
+        overall = float(parse_ok.mean())
+        return by_model, overall
+
+    def _get_think_tag_rate_map(self, df: pd.DataFrame):
+        if "has_think_open" not in df.columns or "has_think_close" not in df.columns:
+            return {}, {}, None, None
+
+        open_tags = pd.to_numeric(df["has_think_open"], errors="coerce")
+        close_tags = pd.to_numeric(df["has_think_close"], errors="coerce")
+        if open_tags.notna().sum() == 0 and close_tags.notna().sum() == 0:
+            return {}, {}, None, None
+
+        temp = df.copy()
+        temp["has_think_open"] = open_tags
+        temp["has_think_close"] = close_tags
+        open_by_model = temp.groupby("model_name")["has_think_open"].mean().to_dict()
+        close_by_model = temp.groupby("model_name")["has_think_close"].mean().to_dict()
+        overall_open = float(open_tags.mean()) if open_tags.notna().sum() > 0 else None
+        overall_close = float(close_tags.mean()) if close_tags.notna().sum() > 0 else None
+        return open_by_model, close_by_model, overall_open, overall_close
+
+    def _get_token_and_cost_map(self, df: pd.DataFrame):
+        if "completion_tokens" not in df.columns:
+            return {}, {}, None, None
+
+        completion = pd.to_numeric(df["completion_tokens"], errors="coerce")
+        if completion.notna().sum() == 0:
+            return {}, {}, None, None
+
+        if "prompt_tokens" in df.columns:
+            prompt = pd.to_numeric(df["prompt_tokens"], errors="coerce").fillna(0)
+        else:
+            prompt = pd.Series(0, index=df.index, dtype=float)
+
+        temp = df[["model_name"]].copy()
+        temp["completion_tokens"] = completion.fillna(0)
+        temp["prompt_tokens"] = prompt
+
+        price_cache: Dict[str, Tuple[float, float]] = {}
+        for model_name in temp["model_name"].dropna().astype(str).unique():
+            p = get_pricing_v2(model_name)
+            input_price = p.get("input", 0.0) or 0.0
+            output_price = p.get("output", 0.0) or 0.0
+            price_cache[model_name] = (float(input_price), float(output_price))
+
+        price_pairs = temp["model_name"].astype(str).map(lambda n: price_cache.get(n, (0.0, 0.0)))
+        temp["input_price"] = price_pairs.apply(lambda t: t[0])
+        temp["output_price"] = price_pairs.apply(lambda t: t[1])
+        temp["estimated_cost_usd"] = (
+            temp["prompt_tokens"] * temp["input_price"] +
+            temp["completion_tokens"] * temp["output_price"]
+        ) / 1_000_000
+
+        tokens_by_model = temp.groupby("model_name")["completion_tokens"].sum().to_dict()
+        cost_by_model = temp.groupby("model_name")["estimated_cost_usd"].sum().to_dict()
+        overall_tokens = float(temp["completion_tokens"].sum())
+        overall_cost = float(temp["estimated_cost_usd"].sum())
+        return tokens_by_model, cost_by_model, overall_tokens, overall_cost
+
+    def _get_cap_hit_rate_map(self, df: pd.DataFrame):
+        if "completion_tokens" not in df.columns:
+            return {}, None
+
+        tokens = pd.to_numeric(df["completion_tokens"], errors="coerce")
+        if tokens.notna().sum() == 0:
+            return {}, None
+
+        temp = df[["model_name"]].copy()
+        temp["completion_tokens"] = tokens
+        temp = temp[temp["completion_tokens"].notna()].copy()
+        if temp.empty:
+            return {}, None
+
+        # Proxy for truncation pressure: output token count reaches the model-specific
+        # high-end ceiling (p99) to avoid single-item outliers setting the threshold.
+        cap_by_model = temp.groupby("model_name")["completion_tokens"].quantile(0.99).to_dict()
+        temp["cap_tokens_model"] = temp["model_name"].map(cap_by_model)
+        temp["is_cap_hit"] = (temp["completion_tokens"] >= temp["cap_tokens_model"]).astype(float)
+
+        by_model = temp.groupby("model_name")["is_cap_hit"].mean().to_dict()
+        overall = float(temp["is_cap_hit"].mean())
         return by_model, overall
 
     def generate_absolute_counts_table(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -469,7 +592,11 @@ class ShortcutJudgeEvaluator:
         return pd.DataFrame(rows)
 
     def generate_isomorphic_scores_table(self, df: pd.DataFrame) -> pd.DataFrame:
-        effort_map, overall_effort = self._get_reasoning_effort_map(df)
+        syntax_map, overall_syntax = self._get_syntax_score_map(df)
+        parse_ok_map, overall_parse_ok = self._get_parse_success_map(df)
+        think_open_map, think_close_map, overall_think_open, overall_think_close = self._get_think_tag_rate_map(df)
+        tokens_map, cost_map, overall_tokens, overall_cost = self._get_token_and_cost_map(df)
+        cap_hit_map, overall_cap_hit = self._get_cap_hit_rate_map(df)
         tiers = ["basic", "easy", "medium", "hard"]
         rows = []
         for model_name in sorted(df["model_name"].unique()):
@@ -488,14 +615,14 @@ class ShortcutJudgeEvaluator:
                 total_probs += len(t_df)
             row["total"] = total_iso
             row["n_problems"] = total_probs
-            has_ext = df["extensional_correct"].notna().any()
-            if has_ext and model_df["extensional_correct"].notna().any():
-                ns = int(model_df["extensional_correct"].sum()) - int(model_df["isomorphic_correct"].sum())
-            else:
-                ns = None
-            row["Ns"] = ns
-            effort_val = effort_map.get(model_name)
-            row["effort"] = int(round(effort_val)) if (effort_val is not None and not (isinstance(effort_val, float) and pd.isna(effort_val))) else None
+            row["syntax_score"] = syntax_map.get(model_name)
+            row["parse_success_rate"] = parse_ok_map.get(model_name)
+            row["think_open_rate"] = think_open_map.get(model_name)
+            row["think_close_rate"] = think_close_map.get(model_name)
+            row["cap_hit_rate"] = cap_hit_map.get(model_name)
+            token_val = tokens_map.get(model_name)
+            row["completion_tokens_total"] = int(round(token_val)) if token_val is not None else None
+            row["estimated_cost_usd"] = cost_map.get(model_name)
             rows.append(row)
 
         if rows:
@@ -504,8 +631,13 @@ class ShortcutJudgeEvaluator:
                 sum_row[t] = sum(r.get(t) or 0 for r in rows)
             sum_row["total"] = sum(r.get("total") or 0 for r in rows)
             sum_row["n_problems"] = sum(r.get("n_problems") or 0 for r in rows)
-            sum_row["Ns"] = sum(r.get("Ns") or 0 for r in rows if r.get("Ns") is not None) or None
-            sum_row["effort"] = int(round(overall_effort)) if (overall_effort is not None and not (isinstance(overall_effort, float) and pd.isna(overall_effort))) else None
+            sum_row["syntax_score"] = overall_syntax
+            sum_row["parse_success_rate"] = overall_parse_ok
+            sum_row["think_open_rate"] = overall_think_open
+            sum_row["think_close_rate"] = overall_think_close
+            sum_row["cap_hit_rate"] = overall_cap_hit
+            sum_row["completion_tokens_total"] = int(round(overall_tokens)) if overall_tokens is not None else None
+            sum_row["estimated_cost_usd"] = overall_cost
             rows.append(sum_row)
 
         return pd.DataFrame(rows)
@@ -539,6 +671,115 @@ class ShortcutJudgeEvaluator:
                 sum_row[t] = sum(r.get(t) or 0 for r in rows if r.get(t) is not None)
             sum_row["total"] = sum(r.get("total") or 0 for r in rows)
             sum_row["heuristic"] = sum(r.get("heuristic") or 0 for r in rows)
+            rows.append(sum_row)
+
+        return pd.DataFrame(rows)
+
+    def generate_extraction_debug_table(self, df: pd.DataFrame) -> pd.DataFrame:
+        methods = [
+            "rule_block",
+            "code_block",
+            "inline_code",
+            "marker_section",
+            "prolog_window",
+            "line_by_line",
+            "inline_facts",
+            "fallback_text",
+        ]
+        rows = []
+        for model_name in sorted(df["model_name"].unique()):
+            model_df = df[df["model_name"] == model_name]
+            total = len(model_df)
+            if total == 0:
+                continue
+
+            parse_ok = pd.to_numeric(model_df.get("extraction_success"), errors="coerce").fillna(0)
+            if "has_think_close" in model_df.columns:
+                think_close = pd.to_numeric(model_df["has_think_close"], errors="coerce").fillna(0)
+                parse_ok = ((parse_ok > 0) | (think_close > 0)).astype(float)
+
+            struct_methods = ["rule_block", "code_block", "inline_code", "marker_section"]
+            window_methods = ["prolog_window", "line_by_line"]
+            inline_methods = ["inline_facts"]
+            failed_methods = ["fallback_text"]
+
+            def _method_stats(mdf, method_cols):
+                """Return (syntax_ok, iso_ok, shortcut_count) for rows matching method_cols."""
+                if "extraction_method" not in mdf.columns:
+                    return 0, 0, 0
+                mask = mdf["extraction_method"].isin(method_cols)
+                sub = mdf.loc[mask]
+                syn = int(pd.to_numeric(sub.get("syntax_valid"),       errors="coerce").fillna(0).sum())
+                iso = int(pd.to_numeric(sub.get("isomorphic_correct"), errors="coerce").fillna(0).sum())
+                sc  = int(sub.get("is_shortcut", pd.Series(dtype=float)).fillna(0).sum())
+                return syn, iso, sc
+
+            ss  = _method_stats(model_df, struct_methods)
+            ws  = _method_stats(model_df, window_methods)
+            is_ = _method_stats(model_df, inline_methods)
+            fs  = _method_stats(model_df, failed_methods)
+
+            iso_num = pd.to_numeric(model_df["isomorphic_correct"], errors="coerce").fillna(0)
+            row = {
+                "model_name": model_name,
+                "avg":    int(round(float(iso_num.mean()) * 100)),
+                "syntax": int(round(float(pd.to_numeric(model_df["syntax_valid"], errors="coerce").fillna(0).mean()) * 100)),
+                "parseok": int(round(float(parse_ok.mean()) * 100)),
+                "line_parse_on": int(round(float(pd.to_numeric(model_df["line_parse_enabled"], errors="coerce").fillna(0).mean()) * 100))
+                if "line_parse_enabled" in model_df.columns else None,
+                "think_open":  int(round(float(pd.to_numeric(model_df.get("has_think_open",  pd.Series(dtype=float)), errors="coerce").fillna(0).mean()) * 100)),
+                "think_close": int(round(float(pd.to_numeric(model_df.get("has_think_close", pd.Series(dtype=float)), errors="coerce").fillna(0).mean()) * 100)),
+                "struct_syn": ss[0],  "struct_iso": ss[1],  "struct_sc": ss[2],
+                "window_syn": ws[0],  "window_iso": ws[1],  "window_sc": ws[2],
+                "inline_syn": is_[0], "inline_iso": is_[1], "inline_sc": is_[2],
+                "failed_syn": fs[0],  "failed_iso": fs[1],  "failed_sc": fs[2],
+            }
+            for method in methods:
+                row[method] = int((model_df.get("extraction_method") == method).sum()) if "extraction_method" in model_df.columns else 0
+            rows.append(row)
+
+        if rows:
+            parse_ok_all = pd.to_numeric(df.get("extraction_success"), errors="coerce").fillna(0)
+            if "has_think_close" in df.columns:
+                think_close_all = pd.to_numeric(df["has_think_close"], errors="coerce").fillna(0)
+                parse_ok_all = ((parse_ok_all > 0) | (think_close_all > 0)).astype(float)
+
+            struct_methods = ["rule_block", "code_block", "inline_code", "marker_section"]
+            window_methods = ["prolog_window", "line_by_line"]
+            inline_methods = ["inline_facts"]
+            failed_methods = ["fallback_text"]
+
+            def _df_stats(src, cols):
+                if "extraction_method" not in src.columns:
+                    return 0, 0, 0
+                mask = src["extraction_method"].isin(cols)
+                sub = src.loc[mask]
+                syn = int(pd.to_numeric(sub.get("syntax_valid"),       errors="coerce").fillna(0).sum())
+                iso = int(pd.to_numeric(sub.get("isomorphic_correct"), errors="coerce").fillna(0).sum())
+                sc  = int(sub.get("is_shortcut", pd.Series(dtype=float)).fillna(0).sum())
+                return syn, iso, sc
+
+            ss = _df_stats(df, struct_methods)
+            ws = _df_stats(df, window_methods)
+            is_ = _df_stats(df, inline_methods)
+            fs = _df_stats(df, failed_methods)
+
+            sum_row = {
+                "model_name": "SUM",
+                "avg":    int(round(float(pd.to_numeric(df["isomorphic_correct"], errors="coerce").fillna(0).mean()) * 100)),
+                "syntax": int(round(float(pd.to_numeric(df["syntax_valid"],       errors="coerce").fillna(0).mean()) * 100)),
+                "parseok": int(round(float(parse_ok_all.mean()) * 100)),
+                "line_parse_on": int(round(float(pd.to_numeric(df["line_parse_enabled"], errors="coerce").fillna(0).mean()) * 100))
+                if "line_parse_enabled" in df.columns else None,
+                "think_open":  int(round(float(pd.to_numeric(df.get("has_think_open",  pd.Series(dtype=float)), errors="coerce").fillna(0).mean()) * 100)),
+                "think_close": int(round(float(pd.to_numeric(df.get("has_think_close", pd.Series(dtype=float)), errors="coerce").fillna(0).mean()) * 100)),
+                "struct_syn": ss[0],  "struct_iso": ss[1],  "struct_sc": ss[2],
+                "window_syn": ws[0],  "window_iso": ws[1],  "window_sc": ws[2],
+                "inline_syn": is_[0], "inline_iso": is_[1], "inline_sc": is_[2],
+                "failed_syn": fs[0],  "failed_iso": fs[1],  "failed_sc": fs[2],
+            }
+            for method in methods:
+                sum_row[method] = int((df.get("extraction_method") == method).sum()) if "extraction_method" in df.columns else 0
             rows.append(sum_row)
 
         return pd.DataFrame(rows)
@@ -580,7 +821,8 @@ class ShortcutJudgeEvaluator:
 
         return pd.DataFrame(rows)
 
-    def print_formatted_tables(self, iso_table: pd.DataFrame, ns_table: pd.DataFrame) -> None:
+    def print_formatted_tables(self, iso_table: pd.DataFrame, ns_table: pd.DataFrame,
+                               extraction_debug_table: Optional[pd.DataFrame] = None) -> None:
         W = 100
 
         def _short(name: str) -> str:
@@ -590,126 +832,182 @@ class ShortcutJudgeEvaluator:
                 name = name.replace(suffix, "")
             return name
 
-        def _rlvr(name: str) -> str:
-            n = name.lower()
-            if any(k in n for k in ("gpt-5", "o3", "o4", "qwen3")):
-                return "RLVR"
-            if any(k in n for k in ("gpt-4", "ministral")):
-                return "base"
-            return "—"
+        def _fmt_null(x):
+            return "-" if (x is None or (isinstance(x, float) and pd.isna(x))) else x
 
+        # ── TABLE 1: PERFORMANCE OVERVIEW ─────────────────────────────────────────
         if not iso_table.empty:
             print("\n" + "=" * W)
-            print("TABLE 1  |  ACCURACY (Isomorphic Verifier)  +  REWARD SHORTCUTS  Ns")
+            print("TABLE 1  |  MODEL PERFORMANCE")
             print("=" * W)
-            print("Accuracy : % of perturbed-set tasks solved  (genuine rule induction required)")
-            print("Ns       : reward shortcuts = extensional − isomorphic  (positive = exploitation)")
-            print("Effort   : avg completion tokens per problem")
+            print("  Cols   : % tasks solved on the isomorphic (perturbed) test set — 250 per tier")
+            print("  Avg    : overall accuracy across all 1,000 tasks")
+            print("  Syntax : % outputs with syntactically valid Prolog")
+            print("  Tokens : total completion tokens  (M = millions)")
+            print("  Cost   : estimated USD cost")
             print()
 
             disp = iso_table.copy()
             disp["model_name"] = disp["model_name"].apply(_short)
-            disp["RLVR"] = disp["model_name"].apply(_rlvr)
 
-            tiers = ["basic", "easy", "medium", "hard", "total"]
-            for t in tiers:
+            n_models = int((disp["model_name"] != "SUM").sum())
+            for t, denom in [("basic", 250), ("easy", 250), ("medium", 250), ("hard", 250), ("total", 1000)]:
                 if t not in disp.columns:
                     continue
-                denom_tier = 250 if t != "total" else 1000
-
-                n_models = int((disp["model_name"] != "SUM").sum())
-
-                def _pct_row(val, mn, _d=denom_tier, _nm=n_models):
+                def _pct(val, mn, _d=denom, _nm=n_models):
                     if val is None or (isinstance(val, float) and pd.isna(val)):
                         return "-"
                     try:
-                        denom = _d * _nm if mn == "SUM" else _d
-                        return int(round(int(val) / denom * 100))
+                        return int(round(int(val) / (_d * _nm if mn == "SUM" else _d) * 100))
                     except Exception:
                         return val
+                disp[t] = [_pct(v, mn) for v, mn in zip(disp[t], disp["model_name"])]
 
-                disp[t] = [_pct_row(v, mn) for v, mn in zip(disp[t], disp["model_name"])]
+            if "syntax_score" in disp.columns:
+                disp["syntax_score"] = disp["syntax_score"].apply(
+                    lambda x: _fmt_null(x) if x is None or (isinstance(x, float) and pd.isna(x))
+                    else int(round(float(x) * 100))
+                )
+            if "completion_tokens_total" in disp.columns:
+                disp["completion_tokens_total"] = disp["completion_tokens_total"].apply(
+                    lambda x: "-" if (x is None or (isinstance(x, float) and pd.isna(x)))
+                    else f"{float(x) / 1e6:.2f}M"
+                )
+            if "estimated_cost_usd" in disp.columns:
+                disp["estimated_cost_usd"] = disp["estimated_cost_usd"].apply(
+                    lambda x: "-" if (x is None or (isinstance(x, float) and pd.isna(x)))
+                    else f"${float(x):.2f}"
+                )
 
-            disp = disp.rename(columns={"basic": "Basic", "easy": "Easy",
-                                        "medium": "Medium", "hard": "Hard", "total": "Total%"})
-            disp = disp.drop(columns=["n_problems"], errors="ignore")
+            disp = disp.rename(columns={
+                "basic": "Basic", "easy": "Easy", "medium": "Medium", "hard": "Hard",
+                "total": "Avg", "syntax_score": "Syntax",
+                "completion_tokens_total": "Tokens", "estimated_cost_usd": "Cost",
+            })
+            disp = disp.drop(columns=["n_problems", "parse_success_rate", "think_open_rate",
+                                      "think_close_rate", "cap_hit_rate"], errors="ignore")
 
-            cols = ["model_name", "RLVR", "Basic", "Easy", "Medium", "Hard", "Total%", "Ns", "effort"]
+            cols = ["model_name", "Basic", "Easy", "Medium", "Hard", "Avg", "Syntax", "Tokens", "Cost"]
             cols = [c for c in cols if c in disp.columns]
-            disp = disp[cols].fillna("-")
-
-            print(disp.to_string(index=False))
+            print(disp[cols].fillna("-").to_string(index=False))
             print("\n" + "=" * W)
 
+        # ── TABLE 2: REWARD SHORTCUTS ──────────────────────────────────────────────
         if not ns_table.empty:
             print("\n" + "=" * W)
-            print("TABLE 2  |  REWARD SHORTCUTS  Ns  PER COMPLEXITY TIER")
+            print("TABLE 2  |  REWARD SHORTCUTS")
             print("=" * W)
-            print("Ns = extensional solved − isomorphic solved  per tier  (absolute counts out of 250)")
-            print("Heuristic = rules explicitly enumerating grounded training constants")
+            print("  Ns     : extensional solved − isomorphic solved per tier")
+            print("           positive Ns means the model gained points by memorising training constants")
+            print("           (counts out of 250 per tier)")
             print()
 
             disp2 = ns_table.copy()
             disp2["model_name"] = disp2["model_name"].apply(_short)
-            disp2 = disp2.rename(columns={"basic": "Basic", "easy": "Easy",
-                                          "medium": "Medium", "hard": "Hard",
-                                          "total": "Ns_total", "heuristic": "Heuristic"})
-            disp2 = disp2.fillna("-")
-            print(disp2.to_string(index=False))
+            disp2 = disp2.rename(columns={
+                "basic": "Basic", "easy": "Easy", "medium": "Medium", "hard": "Hard",
+                "total": "Ns_total",
+            })
+            # Drop Heuristic — it mirrors Ns_total and adds no new information
+            disp2 = disp2.drop(columns=["heuristic"], errors="ignore")
+            cols2 = ["model_name", "Basic", "Easy", "Medium", "Hard", "Ns_total"]
+            cols2 = [c for c in cols2 if c in disp2.columns]
+            print(disp2[cols2].fillna("-").to_string(index=False))
+            print("\n" + "=" * W)
+
+        # ── TABLE 3: EXTRACTION QUALITY ────────────────────────────────────────────
+        if extraction_debug_table is not None and not extraction_debug_table.empty:
+            print("\n" + "=" * W)
+            print("TABLE 3  |  EXTRACTION QUALITY")
+            print("=" * W)
+            print("  Avg    : isomorphic accuracy %")
+            print("  Syntax : % outputs with syntactically valid Prolog")
+            print("  Format per category:  N total  (✓ = syntax-valid Prolog  ! = reward shortcut detected)")
+            print("  Struct : code/rule blocks + answer markers  (high-confidence)")
+            print("  Window : prolog_window + line_by_line        (heuristic positional)")
+            print("  Inline : inline_facts                        (end-of-text fallback)")
+            print("  Failed : fallback_text                       (raw text → verifier)")
+            print()
+
+            disp3 = extraction_debug_table.copy()
+            disp3["model_name"] = disp3["model_name"].apply(_short)
+
+            # Merge raw method counts into four categories
+            struct_cols = ["rule_block", "code_block", "inline_code", "marker_section"]
+            window_cols = ["prolog_window", "line_by_line"]
+            inline_cols = ["inline_facts"]
+            failed_cols = ["fallback_text"]
+
+            def _sum_cols(df, cols):
+                present = [c for c in cols if c in df.columns]
+                return df[present].apply(pd.to_numeric, errors="coerce").fillna(0).sum(axis=1).astype(int) if present else 0
+
+            disp3["_struct_n"] = _sum_cols(disp3, struct_cols)
+            disp3["_window_n"] = _sum_cols(disp3, window_cols)
+            disp3["_inline_n"] = _sum_cols(disp3, inline_cols)
+            disp3["_failed_n"] = _sum_cols(disp3, failed_cols)
+
+            def _fmt_cat(n_col, syn_col, sc_col, df):
+                """Format as 'N (M✓ K!)'; omit ✓/! annotations when zero."""
+                result = []
+                for _, row in df.iterrows():
+                    n = int(row.get(n_col, 0) or 0)
+                    if n == 0:
+                        result.append("-")
+                        continue
+                    syn = row.get(syn_col)
+                    sc  = row.get(sc_col)
+                    syn = int(syn) if syn is not None and not (isinstance(syn, float) and pd.isna(syn)) else 0
+                    sc  = int(sc)  if sc  is not None and not (isinstance(sc,  float) and pd.isna(sc))  else 0
+                    parts = []
+                    if syn: parts.append(f"{syn}✓")
+                    if sc:  parts.append(f"{sc}!")
+                    result.append(f"{n} ({' '.join(parts)})" if parts else str(n))
+                return result
+
+            disp3["Struct"] = _fmt_cat("_struct_n", "struct_syn", "struct_sc", disp3)
+            disp3["Window"] = _fmt_cat("_window_n", "window_syn", "window_sc", disp3)
+            disp3["Inline"] = _fmt_cat("_inline_n", "inline_syn", "inline_sc", disp3)
+            disp3["Failed"] = _fmt_cat("_failed_n", "failed_syn", "failed_sc", disp3)
+
+            disp3 = disp3.rename(columns={"avg": "Avg", "syntax": "Syntax"})
+            cols3 = ["model_name", "Avg", "Syntax", "Struct", "Window", "Inline", "Failed"]
+            cols3 = [c for c in cols3 if c in disp3.columns]
+            print(disp3[cols3].fillna("-").to_string(index=False))
             print("\n" + "=" * W)
 
     def save_results(self, df: pd.DataFrame, counts_table: pd.DataFrame,
                      summary_table: pd.DataFrame, extensional_table: pd.DataFrame,
                      shortcuts_table: pd.DataFrame, manual_table: pd.DataFrame,
-                     output_subdir: str = "shortcut_judge_eval") -> None:
+                     extraction_debug_table: Optional[pd.DataFrame] = None,
+                     output_subdir: str = "shortcut_judge_eval") -> str:
         output_path = os.path.join(self.output_dir, output_subdir)
         os.makedirs(output_path, exist_ok=True)
 
-        print("\n" + "=" * 80)
-        print("SAVING RESULTS")
-        print("=" * 80)
-
-        detailed_path = os.path.join(output_path, "detailed_results.csv")
-        df.to_csv(detailed_path, index=False)
-        print(f"✓ Saved detailed results: {detailed_path}")
+        df.to_csv(os.path.join(output_path, "detailed_results.csv"), index=False)
+        counts_table.to_csv(os.path.join(output_path, "verifier_absolute_counts.csv"), index=False)
+        summary_table.to_csv(os.path.join(output_path, "verifier_summary.csv"), index=False)
 
         if extensional_table is not None and not extensional_table.empty:
-            extensional_path = os.path.join(output_path, "extensional_verifier_scores.csv")
-            extensional_table.to_csv(extensional_path, index=False)
-            print(f"✓ Saved extensional verifier scores: {extensional_path}")
-
+            extensional_table.to_csv(os.path.join(output_path, "extensional_verifier_scores.csv"), index=False)
         if shortcuts_table is not None and not shortcuts_table.empty:
-            shortcuts_path = os.path.join(output_path, "shortcuts_delta.csv")
-            shortcuts_table.to_csv(shortcuts_path, index=False)
-            print(f"✓ Saved shortcuts (delta) table: {shortcuts_path}")
-
+            shortcuts_table.to_csv(os.path.join(output_path, "shortcuts_delta.csv"), index=False)
         if manual_table is not None and not manual_table.empty:
-            manual_path = os.path.join(output_path, "manual_shortcuts.csv")
-            manual_table.to_csv(manual_path, index=False)
-            print(f"✓ Saved manual shortcuts table: {manual_path}")
-
-        counts_path = os.path.join(output_path, "verifier_absolute_counts.csv")
-        counts_table.to_csv(counts_path, index=False)
-
-        summary_path = os.path.join(output_path, "verifier_summary.csv")
-        summary_table.to_csv(summary_path, index=False)
-
+            manual_table.to_csv(os.path.join(output_path, "manual_shortcuts.csv"), index=False)
+        if extraction_debug_table is not None and not extraction_debug_table.empty:
+            extraction_debug_table.to_csv(os.path.join(output_path, "extraction_debug_summary.csv"), index=False)
         if "category" in df.columns:
-            category_counts = df.groupby(["model_name", "complexity", "category"]).size().unstack(fill_value=0)
-            category_path = os.path.join(output_path, "shortcut_categories.csv")
-            category_counts.to_csv(category_path)
-            print(f"✓ Saved category breakdown: {category_path}")
+            df.groupby(["model_name", "complexity", "category"]).size().unstack(fill_value=0).to_csv(
+                os.path.join(output_path, "shortcut_categories.csv")
+            )
 
-        print(f"\n✓ All results saved to: {output_path}")
+        return output_path
 
     def generate_failure_case_reports(self, model_outputs: Dict[str, List[Dict[str, Any]]],
-                                      df: pd.DataFrame, output_dir: str) -> None:
-        print("\n" + "=" * 80)
-        print("GENERATING FAILURE CASE REPORTS")
-        print("=" * 80)
-
+                                      df: pd.DataFrame, output_dir: str) -> int:
         examples_dir = os.path.join(output_dir, "failure_cases")
         os.makedirs(examples_dir, exist_ok=True)
+        total_cases = 0
 
         has_ext = df["extensional_correct"].notna().any()
 
@@ -758,7 +1056,6 @@ class ShortcutJudgeEvaluator:
                     )
 
             if not failure_cases:
-                print(f"  ℹ {model_name}: No failure cases")
                 continue
 
             report_lines = []
@@ -787,6 +1084,10 @@ class ShortcutJudgeEvaluator:
                 iso_symbol = "✓" if iso_passed == True else ("✗" if iso_passed == False else "?")
                 shortcut_symbol = "✓" if is_shortcut else "✗"
 
+                extraction_method = output.get("extraction_method", "?")
+                extraction_preprocess = output.get("extraction_preprocess", "?")
+                extraction_structured = output.get("extraction_structured", False)
+
                 report_lines.append("─" * 80)
                 report_lines.append(f"EXAMPLE {i} | Problem {problem_id} | Level {level} ({complexity})")
                 report_lines.append("")
@@ -794,15 +1095,9 @@ class ShortcutJudgeEvaluator:
                 report_lines.append(f"Isomorphic verifier:        {iso_symbol}")
                 report_lines.append(f"Reward Shortcut Detected:   {shortcut_symbol} -> {shortcut_type}")
                 report_lines.append(f"Reason: {reason}")
+                report_lines.append(f"Extraction method:          {extraction_method}  (preprocess={extraction_preprocess}, structured={extraction_structured})")
                 report_lines.append("─" * 80)
                 report_lines.append("")
-
-                if output.get("ground_truth"):
-                    report_lines.append("✓ EXPECTED (generalized rule):")
-                    gt = output["ground_truth"]
-                    for line in str(gt).split("\n")[:10]:
-                        report_lines.append(f"    {line}")
-                    report_lines.append("")
 
                 report_lines.append("✗ ACTUAL RAW MODEL OUTPUT:")
                 model_completion = output.get("model_completion")
@@ -823,62 +1118,72 @@ class ShortcutJudgeEvaluator:
                 extracted = output.get("extracted_hypothesis") or ""
                 for line in str(extracted).split("\n"):
                     report_lines.append(f"    {line}")
+
+                scan_hyp = output.get("shortcut_scan_hypothesis")
+                if scan_hyp:
+                    report_lines.append("")
+                    report_lines.append("SHORTCUT DETECTED VIA SECONDARY SCAN:")
+                    for line in str(scan_hyp).split("\n"):
+                        report_lines.append(f"    {line}")
                 report_lines.append("")
                 report_lines.append("")
 
             report_path = os.path.join(examples_dir, f"failures_{model_name}.txt")
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(report_lines))
+            total_cases += len(failure_cases)
 
-            print(f"  ✓ {model_name}: {len(failure_cases)} failure cases → {report_path}")
-
-        print(f"\n✓ All failure case reports saved to: {examples_dir}")
+        return total_cases
 
     def run(self) -> None:
-        print("\n" + "=" * 80)
-        print("ISOMORPHIC PERTURBATION TESTING (IPT)")
-        print("=" * 80)
-        print(f"Output directory: {self.output_dir}")
-        if self.models_filter:
-            print(f"Models filter: {', '.join(self.models_filter)}")
+        W = 100
+        filter_note = f"  (filter: {', '.join(self.models_filter)})" if self.models_filter else ""
+        print("\n" + "=" * W)
+        print(f"  IPT  ·  Isomorphic Perturbation Testing")
+        print(f"  {self.output_dir}{filter_note}")
+        print("=" * W)
 
         model_outputs = self.load_model_outputs()
         if not model_outputs:
-            print("\n✗ No model outputs found!")
+            print("  ✗  No model outputs found.")
             return
+        n_models = len(model_outputs)
+        n_items  = sum(len(v) for v in model_outputs.values())
+        print(f"\n  Loaded      {n_models} models · {n_items:,} outputs")
 
         model_outputs = self.evaluate_with_ipt(model_outputs)
 
         df = self.compute_statistics(model_outputs)
 
-        counts_table = self.generate_absolute_counts_table(df)
-        summary_table = self.generate_aggregated_summary(df)
-        iso_table = self.generate_isomorphic_scores_table(df)
-        ns_table = self.generate_ns_breakdown_table(df)
-        extensional_table = self.generate_extensional_scores_table(df)
-        shortcuts_table = self.generate_shortcuts_table(df)
-        manual_table = self.generate_manual_shortcuts_table(df)
+        counts_table          = self.generate_absolute_counts_table(df)
+        summary_table         = self.generate_aggregated_summary(df)
+        iso_table             = self.generate_isomorphic_scores_table(df)
+        ns_table              = self.generate_ns_breakdown_table(df)
+        extensional_table     = self.generate_extensional_scores_table(df)
+        shortcuts_table       = self.generate_shortcuts_table(df)
+        manual_table          = self.generate_manual_shortcuts_table(df)
+        extraction_debug_table = self.generate_extraction_debug_table(df)
 
-        self.print_formatted_tables(iso_table, ns_table)
+        self.print_formatted_tables(iso_table, ns_table, extraction_debug_table)
 
-        self.save_results(df, counts_table, summary_table, extensional_table,
-                          shortcuts_table, manual_table)
+        output_path = self.save_results(df, counts_table, summary_table, extensional_table,
+                                        shortcuts_table, manual_table, extraction_debug_table)
+        print(f"\n  Saved       {output_path}/")
 
-        output_path = os.path.join(self.output_dir, "shortcut_judge_eval")
         try:
             from shortcuts.shortcut_plots import generate_shortcut_correlation_plots
             df_plot = df.copy()
             df_plot["default_correct"] = df_plot["isomorphic_correct"]
-            df_plot["local_correct"] = df_plot["extensional_correct"]
+            df_plot["local_correct"]   = df_plot["extensional_correct"]
             generate_shortcut_correlation_plots(df_plot, output_path)
-        except Exception as e:
-            print(f"⚠ Skipping plots: {e}")
+        except Exception:
+            pass
 
-        self.generate_failure_case_reports(model_outputs, df, output_path)
+        n_cases = self.generate_failure_case_reports(model_outputs, df, output_path)
+        if n_cases:
+            print(f"  Reports     {output_path}/failure_cases/  ({n_cases} cases)")
 
-        print("\n" + "=" * 80)
-        print("✓ EVALUATION COMPLETE!")
-        print("=" * 80)
+        print("\n" + "=" * W + "\n")
 
 
 def main() -> None:

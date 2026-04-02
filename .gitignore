@@ -8,3 +8,7 @@ shortcuts/__pycache__/__init__.cpython-311.pyc
 shortcuts/__pycache__/shortcut_plots.cpython-310.pyc
 shortcuts/__pycache__/shortcut_plots.cpython-311.pyc
 shortcuts/__pycache__/slr_verifier.cpython-311.pyc
+.claude/settings.json
+__pycache__/pricing.cpython-310.pyc
+__pycache__/pricing.cpython-311.pyc
+plots/__pycache__/plots.cpython-311.pyc
