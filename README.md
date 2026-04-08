@@ -63,8 +63,6 @@ llm-verifier-gaming/
 │   ├── ipt/                    #   Core verification logic
 │   │   └── verifier.py         #   verify_ipt() + extract_hypothesis_with_meta()
 │   └── README.md               #   IPT standalone documentation
-├── plots/
-│   └── plots.py                # Publication-ready figure generation
 ├── shortcuts.py                # Main CLI: run IPT evaluation on model outputs
 ├── pricing.py                  # Token cost lookup via OpenRouter pricing snapshot
 ├── requirements.txt            # Python dependencies
