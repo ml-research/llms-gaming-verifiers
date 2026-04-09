@@ -63,6 +63,10 @@ llm-verifier-gaming/
 │   ├── ipt/                    #   Core verification logic
 │   │   └── verifier.py         #   verify_ipt() + extract_hypothesis_with_meta()
 │   └── README.md               #   IPT standalone documentation
+├── plots/
+│   └── plots.py                # Publication-ready figure generation
+├── evaluate_model_vllm.py      # Run inference on SLR-Bench with vLLM (open-source models)
+├── evaluate_openai.py          # Run inference on SLR-Bench via OpenAI API
 ├── shortcuts.py                # Main CLI: run IPT evaluation on model outputs
 ├── pricing.py                  # Token cost lookup via OpenRouter pricing snapshot
 ├── requirements.txt            # Python dependencies
@@ -87,6 +91,27 @@ brew install swi-prolog               # macOS
 ---
 
 ## Usage
+
+### Running inference on SLR-Bench
+
+**Open-source models** (vLLM, requires GPU):
+
+```bash
+python evaluate_model_vllm.py --model Qwen/Qwen3-8B --enable-thinking --out-path output/eval-oss
+python evaluate_model_vllm.py --model meta-llama/Llama-3.3-70B-Instruct --out-path output/eval-oss
+```
+
+**OpenAI models** (Chat Completions API):
+
+```bash
+export OPENAI_API_KEY=sk-...
+python evaluate_openai.py --model gpt-4o --out-path output/eval-openai
+python evaluate_openai.py --model o3 --reasoning-effort high --out-path output/eval-openai
+```
+
+Both scripts save results to `<out-path>/<model-tag>/model_outputs.json`, which is the input format for `shortcuts.py`.
+
+---
 
 ### Evaluating model outputs for shortcuts
 

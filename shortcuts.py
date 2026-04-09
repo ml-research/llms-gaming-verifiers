@@ -79,12 +79,32 @@ class IPTEvaluator:
         return []
 
     def load_outputs(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Load model_outputs.json from each subdirectory of output_dir."""
+        """Load model_outputs.json from subdirectories of output_dir.
+
+        Supports both flat and one-level-nested layouts:
+          flat:   output_dir/model_name/model_outputs.json
+          nested: output_dir/category/model_name/model_outputs.json
+        A subdirectory is treated as a category (not a model) when it contains
+        no model_outputs.json but does contain further subdirectories.
+        """
         all_outputs: Dict[str, List[Dict[str, Any]]] = {}
-        model_dirs = sorted(
-            d for d in glob.glob(os.path.join(self.output_dir, "*")) if os.path.isdir(d)
-        )
-        for model_dir in model_dirs:
+
+        def _collect_model_dirs(root: str) -> List[str]:
+            dirs = []
+            for d in sorted(glob.glob(os.path.join(root, "*"))):
+                if not os.path.isdir(d):
+                    continue
+                if os.path.exists(os.path.join(d, "model_outputs.json")):
+                    dirs.append(d)
+                else:
+                    # Treat as a category dir — recurse one level
+                    dirs.extend(
+                        sd for sd in sorted(glob.glob(os.path.join(d, "*")))
+                        if os.path.isdir(sd) and os.path.exists(os.path.join(sd, "model_outputs.json"))
+                    )
+            return dirs
+
+        for model_dir in _collect_model_dirs(self.output_dir):
             name = os.path.basename(model_dir)
             if self.models_filter and name not in self.models_filter:
                 continue
