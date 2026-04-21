@@ -1,7 +1,5 @@
-IPT/
 output/
 paper_draft/
-private/
 llm-verifier-gaming.code-workspace
 .vscode/
 .claude/
@@ -9,3 +7,4 @@ __pycache__/
 **/__pycache__/
 *.pyc
 *.pyo
+.github/copilot-instructions.md

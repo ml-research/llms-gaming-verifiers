@@ -1,6 +1,6 @@
 # LLMs Gaming Verifiers: RLVR can Lead to Reward Hacking
 
-[![Paper](https://img.shields.io/badge/Arxiv-LLMs_Gaming_Verifiers-blue)](https://arxiv.org/abs/TODO)
+[![Paper](https://img.shields.io/badge/Arxiv-LLMs_Gaming_Verifiers-blue)](https://arxiv.org/abs/2604.15149)
 [![IPT Evaluator](https://img.shields.io/badge/🤗_HF-IPT_Evaluator-yellow)](https://huggingface.co/spaces/AIML-TUDA/IsomorphicPerturbationTesting)
 [![SLR-Bench](https://img.shields.io/badge/🤗_HF-SLR--Bench-yellow)](https://huggingface.co/datasets/AIML-TUDA/SLR-Bench)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -59,18 +59,16 @@ Genuine rule induction is invariant under logically isomorphic tasks. Shortcut s
 
 ```
 llm-verifier-gaming/
-├── IPT/                        # Isomorphic Perturbation Testing (HF Evaluator)
+├── IPT/                        # Isomorphic Perturbation Testing (HF Evaluator, git submodule)
 │   ├── ipt/                    #   Core verification logic
 │   │   └── verifier.py         #   verify_ipt() + extract_hypothesis_with_meta()
 │   └── README.md               #   IPT standalone documentation
-├── plots/
-│   └── plots.py                # Publication-ready figure generation
 ├── evaluate_model_vllm.py      # Run inference on SLR-Bench with vLLM (open-source models)
 ├── evaluate_openai.py          # Run inference on SLR-Bench via OpenAI API
 ├── shortcuts.py                # Main CLI: run IPT evaluation on model outputs
 ├── pricing.py                  # Token cost lookup via OpenRouter pricing snapshot
 ├── requirements.txt            # Python dependencies
-└── openrouter_pricing_*.json   # Cached OpenRouter pricing snapshot
+└── openrouter_pricing.json   # Cached OpenRouter pricing snapshot
 ```
 
 ---
@@ -78,8 +76,11 @@ llm-verifier-gaming/
 ## Installation
 
 ```bash
-git clone https://github.com/AIML-TUDA/llm-verifier-gaming.git
+git clone --recurse-submodules https://github.com/ml-research/llms-gaming-verifiers.git
 cd llm-verifier-gaming
+
+# If you already cloned without submodules:
+# git submodule update --init --recursive
 
 pip install -r requirements.txt
 
@@ -137,6 +138,12 @@ Options:
 | `--workers` | auto | Worker processes for parallel evaluation |
 
 Results are saved under `<output-dir>/ipt_results/`.
+
+### Regenerating plots
+
+```bash
+python plots/impossible_bench.py
+```
 
 ### Using IPT as a standalone evaluator
 
