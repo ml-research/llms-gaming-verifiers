@@ -239,7 +239,7 @@ If you use this work, please cite:
 ```bibtex
 @inproceedings{
 helff2026llms,
-title={{LLM}s Gaming Verifiers: {RLVR} can Lead to Reward Hacking},
+title={LLMs Gaming Verifiers: RLVR can Lead to Reward Hacking},
 author={Lukas Helff and Quentin Delfosse and David Steinmann and Ruben H{\"a}rle and Hikaru Shindo and Patrick Schramowski and Wolfgang Stammer and Kristian Kersting and Felix Friedrich},
 booktitle={ICLR 2026 Workshop on Logical Reasoning of Large Language Models},
 year={2026},
@@ -253,7 +253,7 @@ If you use SLR-Bench, please also cite:
 
 @inproceedings{
 helff2026slr,
-title={{SLR}: Automated Synthesis for Scalable Logical Reasoning},
+title={SLR: Automated Synthesis for Scalable Logical Reasoning},
 author={Lukas Helff and Ahmad Omar and Felix Friedrich and Antonia Wüst and Tim Woydt and Rupert Mitchell and Patrick Schramowski and Wolfgang Stammer and Kristian Kersting},
 booktitle={The 64th Annual Meeting of the Association for Computational Linguistics},
 year={2026},
