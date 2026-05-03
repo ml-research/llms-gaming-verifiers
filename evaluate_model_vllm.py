@@ -108,7 +108,8 @@ def merge_lora_weights(base_model_path, lora_path, output_path):
 
 def load_vllm_model(model_path, max_seq_length=8096,
                     tensor_parallel_size=None,
-                    distributed_executor_backend=None):
+                    distributed_executor_backend=None,
+                    seed=None):
     """Load model using vLLM for optimized inference."""
 
     print(f"Loading model with vLLM...")
@@ -192,6 +193,8 @@ def load_vllm_model(model_path, max_seq_length=8096,
         args['reasoning_parser'] = 'gemma4'
   
           
+    if seed is not None:
+        args["seed"] = seed
     print(f"Model path: {model_path} with args: {args}")
     # Initialize vLLM model with spawn-safe settings
     llm = LLM(**args)
@@ -460,6 +463,8 @@ def main():
                         help="Reasoning effort for supported models (e.g., GPT-OSS).")
     parser.add_argument("--rerun-truncated", action="store_true",
                         help="Re-run only samples that hit the token limit in an existing run, then merge results.")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Random seed (overrides default 42). Appended to output tag to avoid collisions.")
     args = parser.parse_args()
 
     # Resolve model path/id from unified and legacy args
@@ -478,6 +483,8 @@ def main():
         tag += "-CoT"
     if args.reasoning_effort:
         tag += f"-effort-{args.reasoning_effort}"
+    if args.seed is not None:
+        tag += f"-seed{args.seed}"
     if args.out_path:
         out_dir = os.path.join(args.out_path, tag)
     else:
@@ -558,13 +565,14 @@ def main():
         tokenizer.model_max_length = max_seq_length
 
     # Set global seeds for reproducibility
+    _seed = args.seed if args.seed is not None else DEFAULT_SEED
     try:
-        random.seed(DEFAULT_SEED)
-        np.random.seed(DEFAULT_SEED)
-        torch.manual_seed(DEFAULT_SEED)
+        random.seed(_seed)
+        np.random.seed(_seed)
+        torch.manual_seed(_seed)
         if torch.cuda.is_available():
-            torch.cuda.manual_seed_all(DEFAULT_SEED)
-        os.environ["PYTHONHASHSEED"] = str(DEFAULT_SEED)
+            torch.cuda.manual_seed_all(_seed)
+        os.environ["PYTHONHASHSEED"] = str(_seed)
     except Exception:
         pass
 
@@ -579,6 +587,7 @@ def main():
         max_seq_length=max_seq_length,
         tensor_parallel_size=args.parallel_size,
         distributed_executor_backend=args.distributed_backend,
+        seed=args.seed,
     )
     # Evaluate the model
     print('--' * 20)
