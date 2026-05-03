@@ -24,7 +24,7 @@ DEFAULT_MAX_COMPLETION_TOKENS = 16000
 
 
 def call_model(client: OpenAI, model: str, prompt: str, reasoning_effort: str | None,
-               max_completion_tokens: int) -> tuple[str, int, int]:
+               max_completion_tokens: int, seed: int | None = None) -> tuple[str, int, int]:
     """Call the OpenAI Chat Completions API and return (text, prompt_tokens, completion_tokens)."""
     kwargs: dict = {
         "model": model,
@@ -33,6 +33,8 @@ def call_model(client: OpenAI, model: str, prompt: str, reasoning_effort: str | 
     }
     if reasoning_effort is not None:
         kwargs["reasoning_effort"] = reasoning_effort
+    if seed is not None:
+        kwargs["seed"] = seed
 
     response = client.chat.completions.create(**kwargs)
     choice = response.choices[0]
@@ -56,6 +58,8 @@ def main():
                         help="Evaluate on a subset of N examples (for quick tests).")
     parser.add_argument("--rerun-truncated", action="store_true",
                         help="Re-run only samples that hit the token limit in an existing run.")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Optional seed passed to the API. Also appended to the output dir name.")
     args = parser.parse_args()
 
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -67,6 +71,8 @@ def main():
     tag = args.model.split("/")[-1]
     if args.reasoning_effort:
         tag += f"-effort-{args.reasoning_effort}"
+    if args.seed is not None:
+        tag += f"-seed{args.seed}"
     out_dir = os.path.join(args.out_path, tag)
     outputs_path = os.path.join(out_dir, "model_outputs.json")
 
@@ -104,7 +110,7 @@ def main():
     def _run(example):
         text, pt, ct = call_model(
             client, args.model, example["prompt"],
-            args.reasoning_effort, args.max_completion_tokens,
+            args.reasoning_effort, args.max_completion_tokens, args.seed,
         )
         return {
             "problem_id": example["id"],
@@ -147,6 +153,7 @@ def main():
             "tag": tag,
             "reasoning_effort": args.reasoning_effort,
             "max_completion_tokens": args.max_completion_tokens,
+            "seed": args.seed,
         }, f, indent=2)
 
     exceeded = sum(1 for r in model_outputs if r["completion_tokens"] >= args.max_completion_tokens - 10)
