@@ -7,25 +7,17 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 
-
-> As reinforcement Learning with Verifiable Rewards (RLVR) has become the dominant paradigm for scaling reasoning capabilities in LLMs, a new failure mode emerges: LLMs gaming verifiers. We study this phenomenon on inductive reasoning tasks, where models must induce and output logical rules. We find that RLVR-trained models systematically abandon rule induction. Instead of learning generalizable patterns (e.g., ``trains carrying red cars go east''), they enumerate instance-level labels, producing outputs that pass verifiers without capturing the relational patterns required by the task. We show that this behavior is not a failure of understanding but a form of reward hacking: imperfect verifiers that check only extensional correctness admit false positives. To detect such shortcuts, we introduce Isomorphic Perturbation Testing (IPT), which evaluates a single model output under both extensional and isomorphic verification, where the latter enforces invariance under logically isomorphic tasks. While genuine rule induction remains invariant, shortcut strategies fail. We find that shortcut behavior is specific to RLVR-trained reasoning models (e.g., GPT-5, Olmo3) and absent in non-RLVR models (e.g., GPT-4o, GPT-4.5, Ministral). Moreover, shortcut prevalence increases with task complexity and inference-time compute. In controlled training experiments, extensional verification directly induces shortcut strategies, while isomorphic verification eliminates them. These results show that RLVR can incentivize reward hacking not only through overt manipulation but also by exploiting what the verifier fails to enforce. 
-
-
-
-This repository contains the code to detect and study that behavior:
-
-- **Isomorphic Perturbation Testing (IPT)** — a black-box test that detects reward shortcuts from model outputs alone, without access to weights, activations, or reasoning traces.
-- **Evaluation on SLR-Bench** — scripts to run any open or closed model and report its shortcut rate.
-
-## How IPT Works
-
-LLMs are increasingly trained with reinforcement learning from verifiable rewards (RLVR), which boosts their performance on problems whose answers can be checked automatically. But it can also teach them to exploit the verifier rather than solve the task. We test this on inductive reasoning: a model sees a few labeled examples and must write a general rule that explains them. In our evaluation we find that some LLMs systematically abandon rule induction. Rather than inferring relational rules (e.g., "a train is eastbound if it has a long car"), they enumerate instance-level labels (e.g., "train0 is eastbound, train2 is eastbound"). While such outputs fail the intended task of rule induction, they may game imperfect verifiers that only check extensional correctness on the provided examples.
+> LLMs are increasingly trained with reinforcement learning from verifiable rewards (RLVR), which boosts their performance on problems whose answers can be checked automatically. But it can also teach them to exploit the verifier rather than solve the task. We test this on inductive reasoning: a model sees a few labeled examples and must write a general rule that explains them. In our evaluation we find that some LLMs systematically abandon rule induction. Rather than inferring relational rules (e.g., "a train is eastbound if it has a long car"), they enumerate instance-level labels (e.g., "train0 is eastbound, train2 is eastbound"). While such outputs fail the intended task of rule induction, they may game imperfect verifiers that only check extensional correctness on the provided examples.
 
 🎯 *Inductive rule:* `plants with purple leaves are toxic` (still holds when every object is renamed).
 
 ⚠️ *Shortcut:* `plant_01 is toxic. plant_02 is safe. ...` (breaks as soon as identifiers change).
 
-Isomorphic Perturbation Testing (IPT) exposes these shortcuts and provides a metric for this kind of reward hacking behavior on SLR-Bench.
+Isomorphic Perturbation Testing (IPT) exposes these shortcuts and provides a metric for this kind of reward hacking behavior on SLR-Bench. This repository contains the code to detect and study that behavior:
+
+- **Isomorphic Perturbation Testing (IPT)** — a black-box test that detects reward shortcuts from model outputs alone, without access to weights, activations, or reasoning traces.
+- **Evaluation on SLR-Bench** — scripts to run any open or closed model and report its shortcut rate.
+
 
 ## Detecting Reward Hacking using IPT and SLR-Bench
 
