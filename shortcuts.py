@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from IPT.ipt.verifier import extract_hypothesis_with_meta, verify_ipt
+from IPT.ipt_verifier import extract_hypothesis_with_meta, verify_ipt, legacy_synth_isomorphic
 from pricing import get_pricing_v2
 
 try:
@@ -129,9 +129,30 @@ class IPTEvaluator:
 
     @staticmethod
     def _run_ipt(args: Tuple) -> Tuple[str, int, Dict[str, Any]]:
-        model_name, idx, hypothesis, validation_program, eval_config, timeout = args
-        result = verify_ipt(hypothesis, validation_program, eval_config, timeout=timeout)
+        model_name, idx, hypothesis, ext_vp, iso_vp, eval_config, timeout = args
+        result = verify_ipt(hypothesis, ext_vp, iso_vp, eval_config, timeout=timeout)
         return model_name, idx, result
+
+    @staticmethod
+    def _resolve_programs(reference: Dict[str, Any]) -> Tuple[str, str]:
+        """Resolve (extensional, isomorphic) validation programs from a reference dict.
+
+        Accepts the SLR-Bench dataset names (`validation_program_shortcuts` =
+        extensional, `validation_program` = isomorphic) and falls back to the
+        legacy single-field form (`validation_program` only, treated as
+        extensional with isomorphic synthesized via the trains-only renamer).
+        Returns ("", "") if no usable program is present.
+        """
+        if not isinstance(reference, dict):
+            return "", ""
+        sc = reference.get("validation_program_shortcuts", "")
+        vp = reference.get("validation_program", "")
+        if sc and vp:
+            return sc, vp
+        if vp and not sc:
+            # Legacy: single field, assume extensional, synthesize iso (trains only)
+            return vp, legacy_synth_isomorphic(vp)
+        return "", ""
 
     def evaluate(self, all_outputs: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
         """Extract hypotheses and run IPT on all outputs. Updates dicts in-place."""
@@ -155,8 +176,8 @@ class IPTEvaluator:
                     continue
 
                 reference = output.get("reference", {})
-                validation_program = reference.get("validation_program", "") if isinstance(reference, dict) else ""
-                if not validation_program.strip():
+                ext_vp, iso_vp = self._resolve_programs(reference)
+                if not ext_vp.strip():
                     output.update({**empty, "error": "missing validation_program"})
                     continue
 
@@ -170,7 +191,7 @@ class IPTEvaluator:
                     output.update({**empty, "error": "no hypothesis extracted"})
                     continue
 
-                jobs.append((model_name, idx, hypothesis, validation_program, eval_config, self.timeout))
+                jobs.append((model_name, idx, hypothesis, ext_vp, iso_vp, eval_config, self.timeout))
 
         if not jobs:
             return all_outputs
