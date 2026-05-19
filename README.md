@@ -254,13 +254,3 @@ If you use SLR-Bench, please also cite:
   url       = {https://openreview.net/forum?id=omMnuTTEn7}
 }
 ```
-
----
-
-## Related
-
-- 🧪 [IPT Evaluator on HF Spaces](https://huggingface.co/spaces/AIML-TUDA/IsomorphicPerturbationTesting) — standalone Gradio demo and `evaluate` module
-- 🏆 [Reward-Hacking & SLR-Bench Leaderboard](https://huggingface.co/spaces/AIML-TUDA/slr-leaderboard) — live ranking across the model suite
-- 📊 [SLR-Bench dataset](https://huggingface.co/datasets/AIML-TUDA/SLR-Bench) — full benchmark + curriculum levels
-- ⚙️ [SLR framework](https://github.com/ml-research/ScalableLogicalReasoning) — automatic task generator
-- ✅ [Standard symbolic judge](https://huggingface.co/spaces/AIML-TUDA/VerifiableRewardsForScalableLogicalReasoning) — extensional verifier without shortcut detection
