@@ -7,6 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 
+🆕 May 2026: IPT is now also available for the whole [SLR-Bench suite](https://hf.co/collections/AIML-TUDA/scalable-logical-reasoning) (including multilingual splits and OOD)
+
 > LLMs are increasingly trained with reinforcement learning from verifiable rewards (RLVR), which boosts their performance on problems whose answers can be checked automatically. But it can also teach them to exploit the verifier rather than solve the task. We test this on inductive reasoning: a model sees a few labeled examples and must write a general rule that explains them. In our evaluation we find that some LLMs systematically abandon rule induction. Rather than inferring relational rules (e.g., "a train is eastbound if it has a long car"), they enumerate instance-level labels (e.g., "train0 is eastbound, train2 is eastbound"). While such outputs fail the intended task of rule induction, they may game imperfect verifiers that only check extensional correctness on the provided examples.
 
 🎯 *Inductive rule:* `plants with purple leaves are toxic` (still holds when every object is renamed).
